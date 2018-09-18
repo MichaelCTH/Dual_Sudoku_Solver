@@ -33,20 +33,42 @@ def get_area(img):
             max_area = area
             best_cnt = cnt
 
+
     # black out the area outside of the contour
     mask = np.zeros((img.shape), np.uint8)
     cv2.drawContours(mask, [best_cnt], 0, 255, -1)
     cv2.drawContours(mask, [best_cnt], 0, 0, 2)
+    dst = cv2.cornerHarris(mask, 5, 5, 0.04)
+
+    _,thresh = cv2.threshold(np.uint8(dst), 0, 255, cv2.THRESH_OTSU)
+    _,contour,_ = cv2.findContours(thresh,cv2.RETR_LIST,cv2.CHAIN_APPROX_SIMPLE)
+    corners = []
+    for i,cnt in enumerate(contour):
+        mom = cv2.moments(cnt)
+        if mom['m00'] != 0:
+            x,y = int(mom['m10']/mom['m00']), int(mom['m01']/mom['m00'])
+            corners.append((x,y))
 
     res = cv2.bitwise_and(img,mask)
-    return res
+    return corners,res
 
+
+def unwarp(img, corners):
+    rows,cols = img.shape
+    # map three corners of the convex plane to the corners of a square
+    pts1 = np.float32([corners[3], corners[2], corners[1], corners[0]])
+    pts2 = np.float32([[rows-1,0], [0,0], [0,cols-1], [rows-1,cols-1]])
+
+    M = cv2.getPerspectiveTransform(pts1,pts2)
+    res = cv2.warpPerspective(img,M,(cols,rows))
+    return res
 
 
 if __name__ == '__main__':
     img = cv2.imread("sudoku.jpg")
     img = preprocessing(img)
-    img = get_area(img)
+    corners,img = get_area(img)
+    img = unwarp(img, corners)
     plt.imshow(img, cmap='gray')
     plt.show()
 
